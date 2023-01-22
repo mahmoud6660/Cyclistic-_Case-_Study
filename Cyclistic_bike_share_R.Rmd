@@ -1,0 +1,232 @@
+---
+title: "Cyclistic Case Study"
+author: "mahmoud hassan"
+date: "November 30th, 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Background
+In 2016, Cyclistic launched a successful bike-share offering. Since then, the program has grown to a fleet of 5,824 bicycles that are geo-tracked and locked into a network of 692 stations across Chicago.
+
+Until now, Cyclistic’s marketing strategy relied on building general awareness and appealing to broad consumer segments. One approach that helped make these things possible was the flexibility of its pricing plans: single-ride passes, full-day passes, and annual memberships. Customers who purchase single-ride or full-day passes are referred to as casual riders. Customers who purchase annual memberships are Cyclistic members.
+
+### What Are We Talking About?
+
+* How Do **Annual Members** And **Casual Riders** Use Cyclistic bikes Differently? 
+* Why would casual riders buy Cyclistic annual memberships?
+
+
+* I used Cyclistic’s historical trip data to analyze and identify trends.to visit data source click here [link](https://divvy-tripdata.s3.amazonaws.com/index.html)
+
+
+#### first install.packages()
+
+```{r}
+
+library("tidyverse")
+library("lubridate")
+library("janitor")
+library("dplyr")
+library("scales")
+library("ggplot2")
+```
+
+#### importing and cleaning data
+
+* Import csv files without blank data which does not read as (NA)
+```{r}
+setwd("D:/data analysis/capstone project/case study 1/2022")
+f12<-read.csv("202112-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f1<-read.csv("202201-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f2<-read.csv("202202-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f3<-read.csv("202203-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f4<-read.csv("202204-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f5<-read.csv("202205-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f6<-read.csv("202206-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f7<-read.csv("202207-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f8<-read.csv("202208-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f9<-read.csv("202209-divvy-publictripdata.csv",stringsAsFactors =F,na.strings ="")
+f10<-read.csv("202210-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+f11<-read.csv("202211-divvy-tripdata.csv",stringsAsFactors = F,na.strings = "")
+
+```
+
+
+####  combining the files into one file
+
+```{r}
+
+total_12_month<-rbind(f12,f1,f2,f3,f4,f5,f6,f7,f8,f9,f10,f11)
+```
+
+#### remove duplicated data
+
+```{r}
+
+total_12_month<-total_12_month[!duplicated(total_12_month$ride_id),]
+```
+
+#### remove incompleted data
+
+```{r}
+
+total_12_month<-total_12_month[complete.cases(total_12_month),]
+```
+
+#### convert data as character to date and time
+
+```{r}
+
+total_12_month$started_date<-as.Date(total_12_month$started_at)
+total_12_month$ended_date<-as.Date(total_12_month$ended_at)
+```
+
+#### Create columns to represent month, day and hour of service usage
+
+```{r}
+
+total_12_month$month<-format(as.Date(total_12_month$started_at),"%B")
+total_12_month$day<-format(as.Date(total_12_month$started_at),"%A")
+total_12_month$hour<-format(as.POSIXct(total_12_month$started_at),format=("%H"))
+```
+
+#### create a column to Calculate the cycling trip time
+
+```{r}
+
+total_12_month$ride_length<-
+  difftime(total_12_month$ended_at,total_12_month$started_at,units = c('mins'))
+
+total_12_month<-total_12_month %>% filter(total_12_month$ride_length>0)
+
+
+```
+
+
+#### create a column to represent work day and weekend
+
+
+```{r}
+
+total_12_month$weekdays<-
+  ifelse(total_12_month$day=='Sunday'|total_12_month$day=='Saturday','weekend','work')
+```
+
+
+#### convert data as character to factor
+
+```{r}
+
+total_12_month$month<-
+  factor(total_12_month$month,
+         levels =c("December","January","February",
+                   "March","April","May","June","July",
+                   "August","September","October","November"))
+
+total_12_month$day<-
+  factor(total_12_month$day,
+         levels =c("Monday","Tuesday","Wednesday",
+                   "Thursday", "Friday","Saturday","Sunday"))
+```
+
+#### Saving the result as a CSV
+
+
+```{r}
+
+total_12_month %>% write.csv("cyclistic_clean.csv")
+```
+
+#### Data distribution
+
+Here we want to try to answer the most basic questions about how the data is distributed.
+* there is increasing in trips in summer for annual members and casual riders
+
+```{r}
+
+ggplot(aes(x=started_date,fill=member_casual),data = total_12_month)+
+  geom_histogram()
+```
+
+
+* there is an increasing in count of the trips at the weekend and decreasing on working days for casual riders
+
+* there is an increasing in trips on working days and decreasing at the weekends for annual members
+
+```{r}
+
+ggplot(aes(x=weekdays,y=ride_length,fill=member_casual),data=total_12_month)+
+  geom_boxplot()+
+  coord_cartesian(ylim =c(0,40))
+```
+
+
+
+* there is an increasing in average ride length of trip for casual riders more than annual members per day
+#### group subset data by day and calculate mean of (ride_length)
+
+```{r}
+
+subset_cyclistic_bicke<-total_12_month %>% group_by(day,member_casual) %>%
+  summarise(ride_length_mean=mean(ride_length))
+  
+```
+
+#### separate member_casual column into to column 
+
+```{r}
+
+subset_cyclistic_bicke <- subset_cyclistic_bicke%>% 
+  mutate( casual= ifelse(member_casual=='casual', ride_length_mean, NA))
+
+subset_cyclistic_bicke<-subset_cyclistic_bicke%>% 
+  mutate( member= ifelse(member_casual=='member', ride_length_mean, NA))
+  
+```
+
+#### separate member_casual column into to column 
+
+
+```{r}
+
+subset_cyclistic_bicke<-subset_cyclistic_bicke%>% 
+  group_by(day) %>% summarise(casual,member)
+
+subset_cyclistic_bicke<-subset_cyclistic_bicke %>%
+  summarise(member = max(member, na.rm=TRUE),casual = max(casual, na.rm=TRUE))
+  
+```
+
+#### create line chart for member_casual and average ride length
+
+
+```{r}
+
+ggplot(data =subset_cyclistic_bicke ,aes(x=day,group=1))+
+  geom_line(aes(y=casual,color='casual' ),size=1)+
+  geom_line(aes(y=member,color='member' ),size=1)+
+  theme_classic()+theme(axis.title.x = element_blank())+ylab("average ride length ")+
+  labs(title ='average ride length VS. day ' ,color='member_casual')
+
+```
+
+
+#### Conclusion
+
+* **Casual riders** have many trips on weekends.
+* **annual members** riders have many trips on working days.
+* average ride length for **casual riders** more than **annual members**
+* The evidence is inconclusive
+* There may be more than meets the eye.
+* Moving forward as is with a conversion marketing strategy is risky
+
+#### Recommendations
+
+* Yearly subscription providing an un limited pass for every weekend
+* Focus on the benefits of cycling on health and the environment
+* Preference for annual members bike reservations during peak cycling seas
